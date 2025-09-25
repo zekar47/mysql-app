@@ -41,8 +41,6 @@ public class App {
 
         System.out.println("Connecting to: " + url);
 
-        // Optional: Class.forName("com.mysql.cj.jdbc.Driver"); // not required with JDBC4+ drivers
-
         try (Connection conn = DriverManager.getConnection(url, user, password)) {
             System.out.println("Connected successfully!");
 
