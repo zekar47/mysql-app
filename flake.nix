@@ -58,6 +58,7 @@
               in
               ''
                 export JAVA_TOOL_OPTIONS="${loadLombok}${prev}"
+                export SHELL="/run/current-system/sw/bin/zsh"
                 exec zsh
               '';
           };
