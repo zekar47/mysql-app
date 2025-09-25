@@ -26,13 +26,13 @@
           }
         );
     in
-    {
+      {
       overlays.default =
         final: prev:
         let
           jdk = prev."jdk${toString javaVersion}";
         in
-        {
+          {
           inherit jdk;
           maven = prev.maven.override { jdk_headless = jdk; };
           lombok = prev.lombok.override { inherit jdk; };
@@ -49,6 +49,16 @@
               ncurses
               patchelf
               zlib
+              gtk3
+              glib
+              xorg.libX11
+              xorg.libXext
+              xorg.libXrender
+              xorg.libXtst
+              xorg.libXi
+              xorg.libXcursor
+              xorg.libXrandr
+              xorg.libXxf86vm
             ];
 
             shellHook =
@@ -56,8 +66,9 @@
                 loadLombok = "-javaagent:${pkgs.lombok}/share/java/lombok.jar";
                 prev = "\${JAVA_TOOL_OPTIONS:+ $JAVA_TOOL_OPTIONS}";
               in
-              ''
+                ''
                 export JAVA_TOOL_OPTIONS="${loadLombok}${prev}"
+                export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${pkgs.gtk3}/lib:${pkgs.glib}/lib:${pkgs.xorg.libX11}/lib
                 export SHELL="/run/current-system/sw/bin/zsh"
                 exec zsh
               '';
