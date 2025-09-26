@@ -2,18 +2,21 @@ package com.example;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.ActionEvent;
 import java.sql.*;
+import java.util.Vector;
 
 public class App {
 
     private static Connection connection;
+    private static String currentDatabase;
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(App::createAndShowLogin);
     }
 
+    /* ---------- LOGIN ---------- */
     private static void createAndShowLogin() {
         setDarkTheme();
 
@@ -27,50 +30,29 @@ public class App {
         gbc.anchor = GridBagConstraints.WEST;
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        // Host
-        gbc.gridx = 0; gbc.gridy = 0;
-        panel.add(new JLabel("Host:"), gbc);
         JTextField hostField = new JTextField("localhost", 15);
-        gbc.gridx = 1;
-        panel.add(hostField, gbc);
-
-        // Port
-        gbc.gridx = 0; gbc.gridy = 1;
-        panel.add(new JLabel("Port:"), gbc);
         JTextField portField = new JTextField("3306", 6);
-        gbc.gridx = 1;
-        panel.add(portField, gbc);
-
-        // Username
-        gbc.gridx = 0; gbc.gridy = 2;
-        panel.add(new JLabel("Username:"), gbc);
         JTextField userField = new JTextField("root", 12);
-        gbc.gridx = 1;
-        panel.add(userField, gbc);
-
-        // Password
-        gbc.gridx = 0; gbc.gridy = 3;
-        panel.add(new JLabel("Password:"), gbc);
         JPasswordField passField = new JPasswordField(12);
-        gbc.gridx = 1;
-        panel.add(passField, gbc);
 
-        // Status area
-        JTextArea statusArea = new JTextArea(6, 30);
-        statusArea.setEditable(false);
-        JScrollPane scrollPane = new JScrollPane(statusArea);
-        gbc.gridx = 0; gbc.gridy = 5; gbc.gridwidth = 2;
-        gbc.fill = GridBagConstraints.BOTH;
-        panel.add(scrollPane, gbc);
+        gbc.gridx = 0; gbc.gridy = 0; panel.add(new JLabel("Host:"), gbc);
+        gbc.gridx = 1; panel.add(hostField, gbc);
 
-        // Connect button
+        gbc.gridx = 0; gbc.gridy = 1; panel.add(new JLabel("Port:"), gbc);
+        gbc.gridx = 1; panel.add(portField, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 2; panel.add(new JLabel("Username:"), gbc);
+        gbc.gridx = 1; panel.add(userField, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 3; panel.add(new JLabel("Password:"), gbc);
+        gbc.gridx = 1; panel.add(passField, gbc);
+
         JButton connectBtn = new JButton("Connect");
         gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2;
-        gbc.fill = GridBagConstraints.NONE;
         gbc.anchor = GridBagConstraints.CENTER;
         panel.add(connectBtn, gbc);
 
-        connectBtn.addActionListener((ActionEvent e) -> {
+        connectBtn.addActionListener(e -> {
             String host = hostField.getText().trim();
             String port = portField.getText().trim();
             String user = userField.getText().trim();
@@ -81,17 +63,13 @@ public class App {
                 host, port
             );
 
-            statusArea.append("Connecting to " + host + ":" + port + "...\n");
-
             try {
                 connection = DriverManager.getConnection(url, user, password);
-                statusArea.append("✅ Connected successfully!\n");
-
-                frame.dispose(); // close login
+                frame.dispose();
                 createDatabaseSelector();
-
             } catch (SQLException ex) {
-                statusArea.append("❌ Failed to connect: " + ex.getMessage() + "\n");
+                JOptionPane.showMessageDialog(frame, "Connection failed: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
             }
         });
 
@@ -101,6 +79,7 @@ public class App {
         frame.setVisible(true);
     }
 
+    /* ---------- DATABASE SELECTOR ---------- */
     private static void createDatabaseSelector() {
         JFrame dbFrame = new JFrame("Select Database");
         dbFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -111,7 +90,6 @@ public class App {
         gbc2.insets = new Insets(5, 5, 5, 5);
         gbc2.fill = GridBagConstraints.HORIZONTAL;
 
-        // Load databases
         DefaultComboBoxModel<String> dbModel = new DefaultComboBoxModel<>();
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery("SHOW DATABASES")) {
@@ -123,12 +101,10 @@ public class App {
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
 
-        gbc2.gridx = 0; gbc2.gridy = 0;
-        dbPanel.add(new JLabel("Database:"), gbc2);
         JComboBox<String> dbBox = new JComboBox<>(dbModel);
         dbBox.setEditable(true);
-        gbc2.gridx = 1;
-        dbPanel.add(dbBox, gbc2);
+        gbc2.gridx = 0; gbc2.gridy = 0; dbPanel.add(new JLabel("Database:"), gbc2);
+        gbc2.gridx = 1; dbPanel.add(dbBox, gbc2);
 
         JButton selectBtn = new JButton("Use Database");
         gbc2.gridx = 0; gbc2.gridy = 1; gbc2.gridwidth = 2;
@@ -136,14 +112,12 @@ public class App {
 
         selectBtn.addActionListener(ev -> {
             String chosenDb = (String) dbBox.getEditor().getItem();
-            try (Statement stmt2 = connection.createStatement()) {
-                if (((DefaultComboBoxModel<String>) dbBox.getModel())
-                        .getIndexOf(chosenDb) == -1) {
-                    stmt2.executeUpdate("CREATE DATABASE " + chosenDb);
-                }
-                stmt2.execute("USE " + chosenDb);
-                dbFrame.dispose(); // close selector
-                createMainCrudWindow(chosenDb);
+            try (Statement stmt = connection.createStatement()) {
+                stmt.execute("CREATE DATABASE IF NOT EXISTS " + chosenDb);
+                stmt.execute("USE " + chosenDb);
+                currentDatabase = chosenDb;
+                dbFrame.dispose();
+                createMainCrudWindow();
             } catch (SQLException ex) {
                 JOptionPane.showMessageDialog(dbFrame, "Error selecting database: " + ex.getMessage(),
                         "Error", JOptionPane.ERROR_MESSAGE);
@@ -156,86 +130,180 @@ public class App {
         dbFrame.setVisible(true);
     }
 
-    private static void createMainCrudWindow(String database) {
-        JFrame mainFrame = new JFrame("CRUD - DB: " + database);
+    /* ---------- MAIN CRUD WINDOW ---------- */
+    private static void createMainCrudWindow() {
+        JFrame mainFrame = new JFrame("CRUD Editor - DB: " + currentDatabase);
         mainFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        mainFrame.setSize(800, 600);
 
-        JPanel panel = new JPanel(new GridLayout(5, 1, 10, 10));
-        panel.setBorder(new EmptyBorder(15, 15, 15, 15));
-
-        JButton createBtn = new JButton("Create (INSERT example)");
-        JButton readBtn = new JButton("Read (SELECT example)");
-        JButton updateBtn = new JButton("Update (UPDATE example)");
-        JButton deleteBtn = new JButton("Delete (DELETE example)");
+        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JComboBox<String> tableBox = new JComboBox<>();
+        JButton refreshBtn = new JButton("Refresh Tables");
         JButton disconnectBtn = new JButton("Disconnect");
 
-        JTextArea output = new JTextArea(10, 40);
-        output.setEditable(false);
-        JScrollPane scroll = new JScrollPane(output);
+        topPanel.add(new JLabel("Table:"));
+        topPanel.add(tableBox);
+        topPanel.add(refreshBtn);
+        topPanel.add(disconnectBtn);
 
-        panel.add(createBtn);
-        panel.add(readBtn);
-        panel.add(updateBtn);
-        panel.add(deleteBtn);
-        panel.add(disconnectBtn);
+        JTable table = new JTable();
+        JScrollPane scrollPane = new JScrollPane(table);
 
-        createBtn.addActionListener(e -> {
-            try (Statement stmt = connection.createStatement()) {
-                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(50))");
-                stmt.executeUpdate("INSERT INTO users (name) VALUES ('Alice')");
-                output.append("✅ Inserted example row (Alice).\n");
-            } catch (SQLException ex) {
-                output.append("❌ Error inserting: " + ex.getMessage() + "\n");
-            }
-        });
+        JPanel bottomPanel = new JPanel(new FlowLayout());
+        JButton insertBtn = new JButton("Insert Row");
+        JButton updateBtn = new JButton("Update Row");
+        JButton deleteBtn = new JButton("Delete Row");
+        JButton queryBtn = new JButton("Run SQL");
 
-        readBtn.addActionListener(e -> {
+        bottomPanel.add(insertBtn);
+        bottomPanel.add(updateBtn);
+        bottomPanel.add(deleteBtn);
+        bottomPanel.add(queryBtn);
+
+        mainFrame.add(topPanel, BorderLayout.NORTH);
+        mainFrame.add(scrollPane, BorderLayout.CENTER);
+        mainFrame.add(bottomPanel, BorderLayout.SOUTH);
+
+        /* Load tables into ComboBox */
+        Runnable loadTables = () -> {
+            tableBox.removeAllItems();
             try (Statement stmt = connection.createStatement();
-                 ResultSet rs = stmt.executeQuery("SELECT * FROM users")) {
+                 ResultSet rs = stmt.executeQuery("SHOW TABLES")) {
                 while (rs.next()) {
-                    output.append("Row: id=" + rs.getInt("id") + ", name=" + rs.getString("name") + "\n");
+                    tableBox.addItem(rs.getString(1));
                 }
             } catch (SQLException ex) {
-                output.append("❌ Error reading: " + ex.getMessage() + "\n");
+                JOptionPane.showMessageDialog(mainFrame, "Error loading tables: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
             }
-        });
+        };
+        loadTables.run();
 
-        updateBtn.addActionListener(e -> {
-            try (Statement stmt = connection.createStatement()) {
-                int rows = stmt.executeUpdate("UPDATE users SET name='Bob' WHERE name='Alice'");
-                output.append("✅ Updated " + rows + " row(s).\n");
-            } catch (SQLException ex) {
-                output.append("❌ Error updating: " + ex.getMessage() + "\n");
-            }
+        /* Load selected table contents */
+        tableBox.addActionListener(e -> {
+            String selected = (String) tableBox.getSelectedItem();
+            if (selected != null) loadTableData(selected, table);
         });
+        refreshBtn.addActionListener(e -> loadTables.run());
 
-        deleteBtn.addActionListener(e -> {
-            try (Statement stmt = connection.createStatement()) {
-                int rows = stmt.executeUpdate("DELETE FROM users WHERE name='Bob'");
-                output.append("✅ Deleted " + rows + " row(s).\n");
-            } catch (SQLException ex) {
-                output.append("❌ Error deleting: " + ex.getMessage() + "\n");
-            }
-        });
+        /* CRUD Buttons */
+        insertBtn.addActionListener(e -> insertRow((String) tableBox.getSelectedItem(), mainFrame));
+        updateBtn.addActionListener(e -> updateRow((String) tableBox.getSelectedItem(), mainFrame));
+        deleteBtn.addActionListener(e -> deleteRow((String) tableBox.getSelectedItem(), mainFrame));
+        queryBtn.addActionListener(e -> runCustomQuery(mainFrame, table));
 
         disconnectBtn.addActionListener(e -> {
             try {
-                if (connection != null && !connection.isClosed()) {
-                    connection.close();
-                    output.append("🔌 Disconnected.\n");
-                }
-            } catch (SQLException ex) {
-                output.append("❌ Error disconnecting: " + ex.getMessage() + "\n");
-            }
+                if (connection != null && !connection.isClosed()) connection.close();
+            } catch (SQLException ignored) {}
             mainFrame.dispose();
             createAndShowLogin();
         });
 
-        mainFrame.add(panel, BorderLayout.NORTH);
-        mainFrame.add(scroll, BorderLayout.CENTER);
-        mainFrame.pack();
-        mainFrame.setLocationRelativeTo(null);
         mainFrame.setVisible(true);
+    }
+
+    /* ---------- HELPERS ---------- */
+    private static void loadTableData(String tableName, JTable table) {
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableName)) {
+            DefaultTableModel model = buildTableModel(rs);
+            table.setModel(model);
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(table, "Error loading table: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private static DefaultTableModel buildTableModel(ResultSet rs) throws SQLException {
+        ResultSetMetaData meta = rs.getMetaData();
+        int colCount = meta.getColumnCount();
+        Vector<String> cols = new Vector<>();
+        for (int i = 1; i <= colCount; i++) cols.add(meta.getColumnName(i));
+
+        Vector<Vector<Object>> data = new Vector<>();
+        while (rs.next()) {
+            Vector<Object> row = new Vector<>();
+            for (int i = 1; i <= colCount; i++) row.add(rs.getObject(i));
+            data.add(row);
+        }
+        return new DefaultTableModel(data, cols);
+    }
+
+    private static void insertRow(String tableName, JFrame parent) {
+        if (tableName == null) return;
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableName + " LIMIT 1")) {
+            ResultSetMetaData meta = rs.getMetaData();
+            JPanel panel = new JPanel(new GridLayout(meta.getColumnCount(), 2));
+            JTextField[] fields = new JTextField[meta.getColumnCount()];
+            for (int i = 1; i <= meta.getColumnCount(); i++) {
+                panel.add(new JLabel(meta.getColumnName(i)));
+                fields[i-1] = new JTextField();
+                panel.add(fields[i-1]);
+            }
+            int res = JOptionPane.showConfirmDialog(parent, panel, "Insert Row",
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (res == JOptionPane.OK_OPTION) {
+                StringBuilder sql = new StringBuilder("INSERT INTO " + tableName + " VALUES (");
+                for (int i = 0; i < fields.length; i++) {
+                    sql.append("'").append(fields[i].getText()).append("'");
+                    if (i < fields.length - 1) sql.append(", ");
+                }
+                sql.append(")");
+                stmt.executeUpdate(sql.toString());
+                JOptionPane.showMessageDialog(parent, "Row inserted!");
+            }
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(parent, "Insert failed: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private static void updateRow(String tableName, JFrame parent) {
+        String sql = JOptionPane.showInputDialog(parent, "Enter UPDATE SQL for " + tableName,
+                "UPDATE " + tableName + " SET column=value WHERE condition");
+        if (sql != null) {
+            try (Statement stmt = connection.createStatement()) {
+                int rows = stmt.executeUpdate(sql);
+                JOptionPane.showMessageDialog(parent, "Updated " + rows + " row(s).");
+            } catch (SQLException ex) {
+                JOptionPane.showMessageDialog(parent, "Update failed: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private static void deleteRow(String tableName, JFrame parent) {
+        String sql = JOptionPane.showInputDialog(parent, "Enter DELETE SQL for " + tableName,
+                "DELETE FROM " + tableName + " WHERE condition");
+        if (sql != null) {
+            try (Statement stmt = connection.createStatement()) {
+                int rows = stmt.executeUpdate(sql);
+                JOptionPane.showMessageDialog(parent, "Deleted " + rows + " row(s).");
+            } catch (SQLException ex) {
+                JOptionPane.showMessageDialog(parent, "Delete failed: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private static void runCustomQuery(JFrame parent, JTable table) {
+        String sql = JOptionPane.showInputDialog(parent, "Enter SQL Query");
+        if (sql != null) {
+            try (Statement stmt = connection.createStatement()) {
+                if (sql.trim().toLowerCase().startsWith("select")) {
+                    ResultSet rs = stmt.executeQuery(sql);
+                    table.setModel(buildTableModel(rs));
+                } else {
+                    int rows = stmt.executeUpdate(sql);
+                    JOptionPane.showMessageDialog(parent, "Query executed, " + rows + " row(s) affected.");
+                }
+            } catch (SQLException ex) {
+                JOptionPane.showMessageDialog(parent, "Query failed: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
     private static void setDarkTheme() {
