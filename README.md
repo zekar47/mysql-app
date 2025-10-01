@@ -1,3 +1,5 @@
+Este repositorio está también disponible en [codeberg](https://codeberg.org/zekar/mysql-app). [Aquí la razón](https://sanctum.geek.nz/why-not-github.html)
+
 # Programa MySQL
 
 ## 📖 Descripción General
